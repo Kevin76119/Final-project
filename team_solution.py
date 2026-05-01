@@ -1,135 +1,350 @@
+# Team members: Alexander Iodice, Kevin Chehab, Joseph Fichman, and Massimo Monaco
+# Student IDs: 2533337, 2533862, 2592257, 2578851
+# Required variants from ID digits:
+# 2533337 -> Variant C
+# 2533862 -> Variant A
+# 2592257 -> Variant C
+# 2578851 -> Variant A
+
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-# =========================
-# FILE SETUP (SUPER SIMPLE)
-# =========================
-FILE = Path("decay_c.csv")
+DATA_DIR = Path("data")
 OUTPUT_DIR = Path("outputs")
+OUTPUT_DIR.mkdir(exist_ok=True)
 
-try:
-    OUTPUT_DIR.mkdir(exist_ok=True)
-except:
-    OUTPUT_DIR = Path.cwd()
-# =========================
-# FUNCTIONS
-# =========================
+BACKGROUND_COUNT = 10
+ROLLING_WINDOW = 3
+ANOMALY_THRESHOLD = 45
+LATE_JUMP_THRESHOLD = 5
 
-def load_data(path):
+
+def load_csv(path):
     return pd.read_csv(path)
 
-def clean_data(df):
-    df = df.dropna()
-    df.columns = [col.lower() for col in df.columns]
-    return df.sort_values(df.columns[0])
 
-def estimate_half_life(df):
-    time_col = df.columns[0]
-    count_col = df.columns[1]
+def prepare_decay_data(path):
+    df = load_csv(path).copy()
 
-    initial = df[count_col].iloc[0]
-    half = initial / 2
+    if "Time_s" not in df.columns or "Counts" not in df.columns:
+        raise ValueError(f"{path.name} must contain Time_s and Counts columns.")
 
-    for i in range(len(df)):
-        if df[count_col].iloc[i] <= half:
-            return df[time_col].iloc[i]
-    return None
+    df["Time_s"] = pd.to_numeric(df["Time_s"], errors="coerce")
+    df["Counts"] = pd.to_numeric(df["Counts"], errors="coerce")
+    df = df.dropna(subset=["Time_s", "Counts"])
+    df = df.sort_values("Time_s").reset_index(drop=True)
+    df["Trial"] = path.stem
 
-def find_irregular_points(df):
-    count_col = df.columns[1]
-    df = df.copy()
-    df["diff"] = df[count_col].diff().abs()
+    return df
 
-    threshold = df["diff"].mean() * 2
-    return df[df["diff"] > threshold]
 
-def late_time_anomalies(df):
-    cutoff = int(len(df) * 0.7)
-    return find_irregular_points(df.iloc[cutoff:])
+def estimate_half_life(df, count_column="Counts"):
+    first_count = df[count_column].iloc[0]
+    half_count = first_count / 2
 
-# =========================
-# MAIN
-# =========================
+    half_rows = df[df[count_column] <= half_count]
 
-def main():
-    # Check file exists
-    if not FILE.exists():
-        print("❌ File not found: decay_c.csv")
-        return
+    if half_rows.empty:
+        return np.nan
 
-    print("✅ File found, processing...")
+    return float(half_rows["Time_s"].iloc[0])
 
-    df = load_data(FILE)
-    df = clean_data(df)
 
-    time_col = df.columns[0]
-    count_col = df.columns[1]
+def percent_drop(df, count_column="Counts"):
+    first_count = df[count_column].iloc[0]
+    last_count = df[count_column].iloc[-1]
 
-    # Basic stats
-    initial = df[count_col].iloc[0]
-    minimum = df[count_col].min()
-    mean = df[count_col].mean()
+    if first_count == 0:
+        return np.nan
 
-    # Half-life
-    hl = estimate_half_life(df)
+    return ((first_count - last_count) / first_count) * 100
 
-    # Percent drop
-    percent_drop = ((initial - df[count_col].iloc[-1]) / initial) * 100
 
-    # Anomalies
-    irregular = find_irregular_points(df)
-    late_anom = late_time_anomalies(df)
+def add_background_correction(df, background_count=BACKGROUND_COUNT):
+    corrected = df.copy()
+    corrected["Corrected_Counts"] = corrected["Counts"] - background_count
+    corrected["Corrected_Counts"] = corrected["Corrected_Counts"].clip(lower=0)
+    return corrected
 
-    # =========================
-    # PRINT RESULTS
-    # =========================
-    print("\n--- RESULTS ---")
-    print(f"Initial count: {initial}")
-    print(f"Minimum count: {minimum}")
-    print(f"Mean count: {mean:.2f}")
-    print(f"Estimated half-life: {hl}")
-    print(f"Percent drop: {percent_drop:.2f}%")
-    print(f"Irregular points: {len(irregular)}")
-    print(f"Late anomalies: {len(late_anom)}")
 
-    # =========================
-    # SAVE CSV
-    # =========================
-    summary = pd.DataFrame([{
-        "half_life": hl,
-        "percent_drop": percent_drop,
-        "num_irregular": len(irregular),
-        "late_anomalies": len(late_anom)
-    }])
+def add_smoothing(df, window=ROLLING_WINDOW):
+    smoothed = df.copy()
+    smoothed["Smoothed_Counts"] = smoothed["Counts"].rolling(window=window, min_periods=1).mean()
+    smoothed["Residual"] = smoothed["Counts"] - smoothed["Smoothed_Counts"]
+    return smoothed
 
-    summary.to_csv(OUTPUT_DIR / "summary.csv", index=False)
 
-    # =========================
-    # PLOT
-    # =========================
+def detect_anomalies(df, threshold=ANOMALY_THRESHOLD):
+    checked = df.copy()
+    checked["Count_Change"] = checked["Counts"].diff()
+    checked["Absolute_Change"] = checked["Count_Change"].abs()
+    checked["Anomaly"] = checked["Absolute_Change"] > threshold
+    return checked
+
+
+def late_time_anomalies(df, threshold=LATE_JUMP_THRESHOLD):
+    checked = detect_anomalies(df, ANOMALY_THRESHOLD)
+    midpoint = checked["Time_s"].median()
+    return checked[(checked["Time_s"] > midpoint) & (checked["Count_Change"] > threshold)]
+
+
+def stability_score(df):
+    return float(df["Counts"].diff().abs().mean())
+
+
+def summarize_trial(df):
+    corrected = add_background_correction(df)
+    checked = detect_anomalies(df)
+
+    return {
+        "Trial": df["Trial"].iloc[0],
+        "Initial_Count": round(df["Counts"].iloc[0], 2),
+        "Minimum_Count": round(df["Counts"].min(), 2),
+        "Mean_Count": round(df["Counts"].mean(), 2),
+        "Estimated_Half_Life_s": estimate_half_life(df),
+        "Corrected_Half_Life_s": estimate_half_life(corrected, "Corrected_Counts"),
+        "Percent_Drop": round(percent_drop(df), 2),
+        "Stability_Score": round(stability_score(df), 2),
+        "Anomaly_Count": int(checked["Anomaly"].sum())
+    }
+
+
+def plot_raw_decay(df):
     plt.figure()
-    plt.plot(df[time_col], df[count_col], label="Counts")
-    plt.scatter(irregular[time_col], irregular[count_col], label="Anomalies")
-    plt.legend()
-    plt.title("Decay Analysis")
-
-    plt.savefig(OUTPUT_DIR / "plot.png")
+    plt.plot(df["Time_s"], df["Counts"], marker="o")
+    plt.xlabel("Time (s)")
+    plt.ylabel("Counts")
+    plt.title("Radiation Decay: Counts vs Time")
+    plt.grid(True)
+    plt.savefig(OUTPUT_DIR / "raw_decay_plot.png", bbox_inches="tight")
     plt.close()
 
-    # =========================
-    # REPORT
-    # =========================
-    with open(OUTPUT_DIR / "report.txt", "w") as f:
-        f.write("Radiation Decay Report\n\n")
-        f.write(f"Half-life: {hl}\n")
-        f.write(f"Percent drop: {percent_drop:.2f}%\n")
-        f.write(f"Irregular points: {len(irregular)}\n")
-        f.write(f"Late anomalies: {len(late_anom)}\n")
 
-    print("\n✅ DONE! Check the outputs folder.")
+def plot_half_life_comparison(summary_df):
+    ranked = summary_df.sort_values("Estimated_Half_Life_s")
 
-# =========================
+    plt.figure()
+    plt.bar(ranked["Trial"], ranked["Estimated_Half_Life_s"])
+    plt.xlabel("Trial")
+    plt.ylabel("Estimated Half-Life (s)")
+    plt.title("Half-Life Comparison")
+    plt.xticks(rotation=25)
+    plt.savefig(OUTPUT_DIR / "half_life_comparison.png", bbox_inches="tight")
+    plt.close()
+
+
+def plot_corrected_half_life_comparison(summary_df):
+    x = np.arange(len(summary_df))
+    width = 0.35
+
+    plt.figure()
+    plt.bar(x - width / 2, summary_df["Estimated_Half_Life_s"], width, label="Raw")
+    plt.bar(x + width / 2, summary_df["Corrected_Half_Life_s"], width, label="Corrected")
+    plt.xticks(x, summary_df["Trial"], rotation=25)
+    plt.xlabel("Trial")
+    plt.ylabel("Half-Life (s)")
+    plt.title("Raw vs Corrected Half-Life")
+    plt.legend()
+    plt.savefig(OUTPUT_DIR / "corrected_half_life_comparison.png", bbox_inches="tight")
+    plt.close()
+
+
+def plot_smoothed_vs_raw(df):
+    smoothed = add_smoothing(df)
+
+    plt.figure()
+    plt.plot(smoothed["Time_s"], smoothed["Counts"], marker="o", label="Raw Counts")
+    plt.plot(smoothed["Time_s"], smoothed["Smoothed_Counts"], marker="o", label="Smoothed Counts")
+    plt.xlabel("Time (s)")
+    plt.ylabel("Counts")
+    plt.title("Raw Counts vs Rolling Average")
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(OUTPUT_DIR / "smoothed_vs_raw_curve.png", bbox_inches="tight")
+    plt.close()
+
+
+def plot_stability(summary_df):
+    ranked = summary_df.sort_values("Stability_Score")
+
+    plt.figure()
+    plt.bar(ranked["Trial"], ranked["Stability_Score"])
+    plt.xlabel("Trial")
+    plt.ylabel("Average Absolute Count Change")
+    plt.title("Trial Stability Comparison")
+    plt.xticks(rotation=25)
+    plt.savefig(OUTPUT_DIR / "stability_comparison.png", bbox_inches="tight")
+    plt.close()
+
+
+def plot_dashboard(combined_df, summary_df):
+    first_trial = combined_df["Trial"].iloc[0]
+    one = combined_df[combined_df["Trial"] == first_trial]
+    smoothed_one = add_smoothing(one)
+
+    plt.figure(figsize=(11, 8))
+
+    plt.subplot(2, 2, 1)
+    for trial, df in combined_df.groupby("Trial"):
+        plt.plot(df["Time_s"], df["Counts"], marker="o", label=trial)
+    plt.xlabel("Time (s)")
+    plt.ylabel("Counts")
+    plt.title("Counts vs Time")
+    plt.legend()
+
+    plt.subplot(2, 2, 2)
+    plt.bar(summary_df["Trial"], summary_df["Estimated_Half_Life_s"])
+    plt.title("Estimated Half-Life")
+    plt.xticks(rotation=25)
+
+    plt.subplot(2, 2, 3)
+    plt.plot(smoothed_one["Time_s"], smoothed_one["Counts"], marker="o", label="Raw")
+    plt.plot(smoothed_one["Time_s"], smoothed_one["Smoothed_Counts"], marker="o", label="Smoothed")
+    plt.title("Smoothed vs Raw Curve")
+    plt.xlabel("Time (s)")
+    plt.ylabel("Counts")
+    plt.legend()
+
+    plt.subplot(2, 2, 4)
+    plt.bar(summary_df["Trial"], summary_df["Stability_Score"])
+    plt.title("Dashboard Stability Panel")
+    plt.xticks(rotation=25)
+
+    plt.tight_layout()
+    plt.savefig(OUTPUT_DIR / "decay_dashboard.png", bbox_inches="tight")
+    plt.close()
+
+
+def phase1(files):
+    first_file = files[0]
+    df = prepare_decay_data(first_file)
+
+    summary_df = pd.DataFrame([summarize_trial(df)])
+    summary_df.to_csv(OUTPUT_DIR / "phase1_summary.csv", index=False)
+
+    plot_raw_decay(df)
+
+    (OUTPUT_DIR / "phase1_reflection.md").write_text(
+        "# Phase 1 Reflection\n\n"
+        "The Phase 1 code loads a decay CSV file, validates the Time_s and Counts columns, "
+        "sorts the readings by time, creates a raw decay plot, and exports a summary table. "
+        "The half-life is estimated with the first-half method by finding the first time where "
+        "the count value falls to half of the initial count or lower.\n",
+        encoding="utf-8"
+    )
+
+
+def phase2(files):
+    summaries = []
+    anomaly_frames = []
+
+    for file in files:
+        df = prepare_decay_data(file)
+        corrected = add_background_correction(df)
+        checked = detect_anomalies(df)
+
+        summaries.append(summarize_trial(df))
+
+        anomalies = checked[checked["Anomaly"]].copy()
+        if not anomalies.empty:
+            anomaly_frames.append(anomalies)
+
+    summary_df = pd.DataFrame(summaries).sort_values("Estimated_Half_Life_s")
+    summary_df["Half_Life_Rank"] = range(1, len(summary_df) + 1)
+    summary_df.to_csv(OUTPUT_DIR / "phase2_summary.csv", index=False)
+
+    if anomaly_frames:
+        pd.concat(anomaly_frames, ignore_index=True).to_csv(OUTPUT_DIR / "phase2_anomalies.csv", index=False)
+    else:
+        pd.DataFrame(columns=["Trial", "Time_s", "Counts", "Count_Change", "Absolute_Change", "Anomaly"]).to_csv(
+            OUTPUT_DIR / "phase2_anomalies.csv", index=False
+        )
+
+    plot_half_life_comparison(summary_df)
+
+    (OUTPUT_DIR / "phase2_notes.md").write_text(
+        "# Phase 2 Notes\n\n"
+        "Phase 2 compares at least three decay trials. For each trial, the code estimates half-life, "
+        "calculates total percent drop, ranks the trials by half-life, and creates a comparison bar chart.\n\n"
+        "Student-ID modules included:\n\n"
+        "- Variant A: background-count correction before computing corrected half-life.\n"
+        "- Variant C: anomaly detection using unusually large count differences between readings.\n",
+        encoding="utf-8"
+    )
+
+
+def phase3(files):
+    detailed = []
+    summaries = []
+    late_anomaly_frames = []
+
+    for file in files:
+        df = prepare_decay_data(file)
+        df = add_background_correction(df)
+        df = add_smoothing(df)
+        df = detect_anomalies(df)
+
+        detailed.append(df)
+        summaries.append(summarize_trial(df))
+
+        late = late_time_anomalies(df)
+        if not late.empty:
+            late_anomaly_frames.append(late)
+
+    combined_df = pd.concat(detailed, ignore_index=True)
+    summary_df = pd.DataFrame(summaries).sort_values("Stability_Score")
+
+    combined_df.to_csv(OUTPUT_DIR / "combined_decay_data.csv", index=False)
+
+    if late_anomaly_frames:
+        pd.concat(late_anomaly_frames, ignore_index=True).to_csv(OUTPUT_DIR / "late_time_anomaly_report.csv", index=False)
+    else:
+        pd.DataFrame(columns=["Trial", "Time_s", "Counts", "Count_Change", "Absolute_Change", "Anomaly"]).to_csv(
+            OUTPUT_DIR / "late_time_anomaly_report.csv", index=False
+        )
+
+    plot_corrected_half_life_comparison(summary_df)
+    plot_smoothed_vs_raw(combined_df[combined_df["Trial"] == combined_df["Trial"].iloc[0]])
+    plot_dashboard(combined_df, summary_df)
+    plot_stability(summary_df)
+
+    most_stable = summary_df.iloc[0]
+    least_stable = summary_df.iloc[-1]
+
+    report = (
+        "Phase 3 Final Report\n"
+        "====================\n\n"
+        f"Most stable trial: {most_stable['Trial']}\n"
+        f"Least stable trial: {least_stable['Trial']}\n\n"
+        "Stability was estimated using the average absolute difference between consecutive count values. "
+        "A smaller stability score means that the trial had smoother count changes between readings.\n\n"
+        "Variant A was included by comparing raw half-life with corrected half-life after subtracting "
+        f"a background count of {BACKGROUND_COUNT}.\n\n"
+        f"Variant C was included by detecting unusually large count differences and by exporting a late-time "
+        f"anomaly report for irregular jumps greater than {LATE_JUMP_THRESHOLD} counts after the midpoint of the trial.\n\n"
+        "The cleaned combined dataset includes raw counts, corrected counts, rolling-average smoothed counts, "
+        "residuals, count changes, and anomaly flags for all trial files.\n"
+    )
+
+    (OUTPUT_DIR / "phase3_report.txt").write_text(report, encoding="utf-8")
+
+
+def main():
+    files = sorted(DATA_DIR.glob("*.csv"))
+
+    if len(files) == 0:
+        raise FileNotFoundError("No CSV files were found in the data folder.")
+
+    phase1(files)
+    phase2(files)
+    phase3(files)
+
+    print("Radiation decay analysis complete.")
+    print(f"Processed {len(files)} file(s).")
+    print(f"Outputs saved in: {OUTPUT_DIR}")
+
 
 if __name__ == "__main__":
     main()
