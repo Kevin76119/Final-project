@@ -76,18 +76,3 @@ The estimated half-life uses the first-half method:
 ## Stability Method
 
 The most stable trial is the one with the smallest average absolute difference between consecutive count values. A smaller value means the count readings changed more smoothly.
-
-## Notes for Coding Challenge
-
-The main functions to understand are:
-
-- `prepare_decay_data(path)`
-- `estimate_half_life(df, count_column="Counts")`
-- `percent_drop(df, count_column="Counts")`
-- `add_background_correction(df)`
-- `detect_anomalies(df)`
-- `add_smoothing(df)`
-- `summarize_trial(df)`
-- `phase1(files)`
-- `phase2(files)`
-- `phase3(files)`
