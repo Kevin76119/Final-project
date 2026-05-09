@@ -44,26 +44,26 @@ Each file must contain:
 
 Phase 1:
 
-- `raw_decay_plot.png`
-- `phase1_summary.csv`
-- `phase1_reflection.md`
+- `outputs/raw_decay_plot.png`
+- `outputs/phase1_summary.csv`
+- `outputs/phase1_reflection.md`
 
 Phase 2:
 
-- `phase2_summary.csv`
-- `half_life_comparison.png`
-- `phase2_notes.md`
-- `phase2_anomalies.csv`
+- `outputs/phase2_summary.csv`
+- `outputs/half_life_comparison.png`
+- `outputs/phase2_notes.md`
+- `outputs/phase2_anomalies.csv`
 
 Phase 3:
 
-- `combined_decay_data.csv`
-- `decay_dashboard.png`
-- `phase3_report.txt`
-- `corrected_half_life_comparison.png`
-- `smoothed_vs_raw_curve.png`
-- `stability_comparison.png`
-- `late_time_anomaly_report.csv`
+- `outputs/combined_decay_data.csv`
+- `outputs/decay_dashboard.png`
+- `outputs/phase3_report.txt`
+- `outputs/corrected_half_life_comparison.png`
+- `outputs/smoothed_vs_raw_curve.png`
+- `outputs/stability_comparison.png`
+- `outputs/late_time_anomaly_report.csv`
 
 ## Half-Life Method
 
