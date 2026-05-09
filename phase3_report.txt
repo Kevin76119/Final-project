@@ -1,0 +1,13 @@
+Phase 3 Final Report
+====================
+
+Most stable trial: decay_lab_A
+Least stable trial: decay_lab_C
+
+Stability was estimated using the average absolute difference between consecutive count values. A smaller stability score means that the trial had smoother count changes between readings.
+
+Variant A was included by comparing raw half-life with corrected half-life after subtracting a background count of 10.
+
+Variant C was included by detecting unusually large count differences and by exporting a late-time anomaly report for irregular jumps greater than 5 counts after the midpoint of the trial.
+
+The cleaned combined dataset includes raw counts, corrected counts, rolling-average smoothed counts, residuals, count changes, and anomaly flags for all trial files.

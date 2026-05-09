@@ -1,0 +1,3 @@
+Time_s,Counts,Trial,Corrected_Counts,Smoothed_Counts,Residual,Count_Change,Absolute_Change,Anomaly
+110,14,decay_lab_A,4,10.666666666666666,3.333333333333334,6.0,6.0,False
+115,62,decay_lab_B,52,53.0,9.0,17.0,17.0,False
