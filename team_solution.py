@@ -348,3 +348,173 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+# 1. Count values above a threshold
+def count_above_threshold(counts, threshold):
+    total = 0
+
+    for value in counts:
+        if value > threshold:
+            total += 1
+
+    return total
+
+
+# 2. Count values below a threshold
+def count_below_threshold(counts, threshold):
+    total = 0
+
+    for value in counts:
+        if value < threshold:
+            total += 1
+
+    return total
+
+
+# 3. Count values between two numbers
+def count_between(counts, low, high):
+    total = 0
+
+    for value in counts:
+        if low <= value <= high:
+            total += 1
+
+    return total
+
+
+# 4. Find the first value below a threshold
+def first_below_threshold(counts, threshold):
+    for value in counts:
+        if value < threshold:
+            return value
+
+    return None
+
+
+# 5. Count how many values are below half the initial count
+def count_below_half_initial(counts):
+    initial_count = counts.iloc[0]
+    half_count = initial_count / 2
+    total = 0
+
+    for value in counts:
+        if value < half_count:
+            total += 1
+
+    return total
+
+
+# 6. Find first time count goes below half initial count
+def find_half_life_time(df):
+    initial_count = df["Counts"].iloc[0]
+    half_count = initial_count / 2
+
+    for i in range(len(df)):
+        if df["Counts"].iloc[i] <= half_count:
+            return df["Time_s"].iloc[i]
+
+    return None
+
+
+# 7. Find the maximum count using a loop
+def find_max_count(counts):
+    maximum = counts.iloc[0]
+
+    for value in counts:
+        if value > maximum:
+            maximum = value
+
+    return maximum
+
+
+# 8. Find the minimum count using a loop
+def find_min_count(counts):
+    minimum = counts.iloc[0]
+
+    for value in counts:
+        if value < minimum:
+            minimum = value
+
+    return minimum
+
+
+# ============================================================
+# PHASE 2 — ADDING COLUMNS TO SUMMARY DATAFRAME
+# ============================================================
+
+# Use these after you already have summary_df created.
+
+# 1. Add count range
+# summary_df["Count_Range"] = summary_df["Max_Count"] - summary_df["Min_Count"]
+
+# 2. Add half of the initial count
+# summary_df["Half_Initial_Count"] = summary_df["Initial_Count"] / 2
+
+# 3. Add count drop
+# summary_df["Count_Drop"] = summary_df["Initial_Count"] - summary_df["Final_Count"]
+
+# 4. Add percent drop
+# summary_df["Percent_Drop"] = ((summary_df["Initial_Count"] - summary_df["Final_Count"]) / summary_df["Initial_Count"]) * 100
+
+# 5. Add average count per second
+# summary_df["Average_Count_Per_Second"] = summary_df["Average_Count"] / summary_df["Total_Time_s"]
+
+# 6. Add fast decay column
+# summary_df["Fast_Decay"] = summary_df["Half_Life_s"] < 50
+
+# 7. Add difference from average half-life
+# overall_avg_half_life = summary_df["Half_Life_s"].mean()
+# summary_df["Difference_From_Average"] = summary_df["Half_Life_s"] - overall_avg_half_life
+
+# 8. Add difference from average count
+# overall_avg_count = summary_df["Average_Count"].mean()
+# summary_df["Difference_From_Avg_Count"] = summary_df["Average_Count"] - overall_avg_count
+
+
+# ============================================================
+# PHASE 3 — FILTERING DATAFRAMES
+# ============================================================
+
+# Use these after you already have df created.
+
+# 1. Filter rows after 40 seconds and below average count
+# trial_avg = df["Counts"].mean()
+# filtered = df[(df["Time_s"] >= 40) & (df["Counts"] < trial_avg)]
+# print(filtered)
+
+# 2. Filter rows where counts are above average
+# trial_avg = df["Counts"].mean()
+# filtered = df[df["Counts"] > trial_avg]
+# print(filtered)
+
+# 3. Filter rows where time is between 20 and 60 seconds
+# filtered = df[(df["Time_s"] >= 20) & (df["Time_s"] <= 60)]
+# print(filtered)
+
+# 4. Filter rows where counts are below half the initial count
+# initial_count = df["Counts"].iloc[0]
+# half_count = initial_count / 2
+# filtered = df[df["Counts"] <= half_count]
+# print(filtered)
+
+# 5. Filter rows after 30 seconds and counts above 100
+# filtered = df[(df["Time_s"] >= 30) & (df["Counts"] > 100)]
+# print(filtered)
+
+# 6. Filter suspicious data: counts less than 0 or missing
+# filtered = df[(df["Counts"] < 0) | (df["Counts"].isna())]
+# print(filtered)
+
+# 7. Filter rows where counts are between 50 and 150
+# filtered = df[(df["Counts"] >= 50) & (df["Counts"] <= 150)]
+# print(filtered)
+
+# 8. Filter rows before 60 seconds and above average
+# trial_avg = df["Counts"].mean()
+# filtered = df[(df["Time_s"] < 60) & (df["Counts"] > trial_avg)]
+# print(filtered)
+
+
+
